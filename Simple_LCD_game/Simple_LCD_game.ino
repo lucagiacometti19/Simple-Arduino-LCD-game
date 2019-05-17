@@ -61,7 +61,7 @@ void loop() {
 
 void gameStart() {
   greeting();
-  infos();
+  //infos();
   bool confirm = false;
   while (!confirm) {
     bool updated = false;
@@ -80,11 +80,13 @@ void gameStart() {
     if (digitalRead(leftButton) == LOW) {
       if (difficulty > 1) {
         difficulty = difficulty / 2;
+        updated = true;
       }
     }
     if (updated) {
       refreshDifficulty();
       updated = false;
+      delay(delay_/10);
     }
   }
 }
@@ -132,7 +134,6 @@ void refreshDifficulty() {
   lcd.print("difficulty:");
   lcd.setCursor(8, 1);
   lcd.print(difficulty);
-  delay(delay_);
 }
 
 void greeting()
