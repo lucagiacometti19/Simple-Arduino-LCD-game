@@ -5,20 +5,31 @@
    posizione 3 -> x=11
 */
 
+#include <EEPROM.h>
 #include <LiquidCrystal.h>
+#define CONFIG_START 0
 
 //costanti
-const int time_ = 4000;
+const int time_ = 2000;
 const int delay_ = 2000;
 const int rightButton = A5;
 const int centerButton = A4;
 const int leftButton = A3;
+const char alphabet [] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+
+//struct [4 bytes]
+struct player {
+  char name_[3];
+  int score_;
+};
 
 //variabili
 int life;
-int difficulty; //1->easy; 2->normal; 4->hard
-int score;
+int difficulty;           //1->easy; 2->normal; 4->hard
+int lowerScore;
+player player_;           //the current player
+player playerArray[2] ;     //array of previous players
 
 //custom char
 byte hearth[] = {B00000, B00000, B01010, B11111, B11111, B01110, B00100, B00000};
@@ -31,12 +42,18 @@ byte coin3[] = {B00000, B00000, B00000, B10000, B01000, B00100, B10100, B10100};
 byte coin4[] = {B10100, B10100, B00100, B00100, B01000, B10000, B00000, B00000};
 
 
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(rightButton, INPUT_PULLUP);
   pinMode(centerButton, INPUT_PULLUP);
   pinMode(leftButton, INPUT_PULLUP);
-  score = 0;
+  Serial.begin(9600);
+  getPreviousPlayers();                             //gets previous players from EEPROM
+  Serial.println(playerArray[0].name_);
+  Serial.println(playerArray[0].score_);
+  Serial.println(playerArray[1].name_);
+  Serial.println(playerArray[1].score_);
   difficulty = 1;
   life = 4;
   lcd.begin(16, 2);
@@ -45,23 +62,64 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
+  getName();
   gameStart();
   while (life > 0) {
     play();
   }
-  lcd.clear();
-  lcd.home();
-  ANIM_M1();
-  for (int i = 0; i < 2; i++)
-  {
-    ANIM_CLOSE();
-  }
-  ANIM_1();
+  ClearSetCursor(0, 0);     //pulisce e resetta la poszione del cursore dell'lcd
+  endingAnimation();        //animazione
+  save();
+  delay(100000000);
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//EEPROM methods
+void savePlayer(int address) {
+  //save player name
+  EEPROM.put(address, player_.name_);
+  address += (3 * (sizeof(char)));              //ogni char occupa una cella di memoria
+  //save score
+  EEPROM.put(address, player_.score_);
+  address++;                                    //aumento address della grandezza di un int < 256
 }
 
+void getPreviousPlayers() {
+  bool finished = false;
+  int address = 0;
+  int index = 0;
+  while (!finished) {
+    //get the name of the player
+    char name_ [3];
+    for (int i = 0; i < 3; i++) {
+      name_[i] = EEPROM.read(address);
+      address ++;
+    }
+    //get the score of the player
+    int score_;
+    score_ = EEPROM.read(address);
+    address++;
+    //create the struct
+    player player1_;
+    for (int i = 0; i < 3; i++) {
+      player1_.name_[i] = name_[i];
+    }
+    player1_.score_ = score_;
+    //put the object in the array
+    playerArray[index] = player1_;
+    if (index == 0) {
+      index++;
+    }
+    else {
+      finished = true;
+    }
+  }
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//main methods
 void gameStart() {
   greeting();
-  //infos();
+  showChart();
+  getDifficultyMessage();
   bool confirm = false;
   while (!confirm) {
     bool updated = false;
@@ -86,79 +144,9 @@ void gameStart() {
     if (updated) {
       refreshDifficulty();
       updated = false;
-      delay(delay_/10);
+      delay(delay_ / 10);
     }
   }
-}
-
-void confirmMessage() {
-  lcd.clear();
-  lcd.setCursor(2, 0);
-  lcd.print("Confermato!");
-  delay(delay_);
-}
-
-void infos() {
-  lcd.clear();
-  lcd.home();
-  lcd.print("Usare i bottoni per");
-  lcd.setCursor(0, 1);
-  lcd.print("modificare la difficolta'");
-  bool left_right = true;
-  for (int i = 0; i < 45; i++) {
-    if (left_right) {
-      lcd.scrollDisplayRight();
-      delay(delay_ / 4);
-    }
-    else {
-      lcd.scrollDisplayLeft();
-      delay(delay_ / 4);
-    }
-    if (i % 11 == 0 && left_right) {
-      left_right = false;
-    }
-    else if (i % 11 == 0 && !left_right) {
-      left_right = true;
-    }
-  }
-  lcd.clear();
-  lcd.setCursor(4, 0);
-  lcd.print("Premi il");
-  lcd.setCursor(2, 1);
-  lcd.print("rosso o blu");
-}
-
-void refreshDifficulty() {
-  lcd.clear();
-  lcd.setCursor(2, 0);
-  lcd.print("difficulty:");
-  lcd.setCursor(8, 1);
-  lcd.print(difficulty);
-}
-
-void greeting()
-{
-  lcd.setCursor(0, 0);
-  lcd.print("  Gioco arduino");
-  lcd.setCursor(0, 1);
-  lcd.print("    by Luca");
-  delay(delay_);
-  for (int i = 0; i < 17; i++)
-  {
-    lcd.scrollDisplayRight();
-    delay(50);
-  }
-}
-
-void createChars() {
-  lcd.createChar(0, hearth);
-  lcd.createChar(1, eye);
-  lcd.createChar(2, left_good_mouth);
-  lcd.createChar(3, right_good_mouth);
-  lcd.createChar(4, coin1);
-  lcd.createChar(5, coin2);
-  lcd.createChar(6, coin3);
-  lcd.createChar(7, coin4);
 }
 
 void play() {
@@ -200,37 +188,6 @@ void refreshLife() {
     createOneLife(15, 0);
     createOneLife(15, 1);
   }
-}
-
-void createOneLife(int x, int y) {
-  lcd.setCursor(x, y);
-  lcd.write(byte(0));
-}
-
-void createBadFace(int x) {
-  lcd.setCursor(x, 0);
-  lcd.write(1);
-  lcd.write(1);
-  lcd.setCursor(x, 1);
-  lcd.print("--");
-}
-
-void createGoodFace(int x) {
-  lcd.setCursor(x, 0);
-  lcd.write(1);
-  lcd.write(1);
-  lcd.setCursor(x, 1);
-  lcd.write(2);
-  lcd.write(3);
-}
-
-void createCoin(int x) {
-  lcd.setCursor(x, 0);
-  lcd.write(4);
-  lcd.write(6);
-  lcd.setCursor(x, 1);
-  lcd.write(5);
-  lcd.write(7);
 }
 
 void randomGoodFace(int value) {
@@ -281,11 +238,11 @@ void check(int random_value, int buttonPressed) {
     if (life < 4) {
       life++;
     }
-    score += difficulty;
+    player_.score_ += difficulty;
     correct(true);
   }
   else if (random_value % 5 != 0 && random_value % 3 == buttonPressed - 1) {
-    score += difficulty;
+    player_.score_ += difficulty;
     correct(false);
   }
   else {
@@ -294,13 +251,201 @@ void check(int random_value, int buttonPressed) {
   }
 }
 
+void getName() {
+  getNameMessage();
+  int index = 0;
+  int x = 6;
+  String name_ = "";
+  bool finished = false;
+  printLetter(x, 'A');
+  while (!finished) {
+    if (digitalRead(rightButton) == LOW) {
+      if (index == 25) {
+        index = 0;
+        printLetter(x, alphabet[index]);
+      }
+      else {
+        index++;
+        printLetter(x, alphabet[index]);
+      }
+      delay(delay_ / 10);
+    }
+    if (digitalRead(centerButton) == LOW) {
+      if (x == 8) {
+        finished = true;
+      }
+      else {
+        x++;
+        printLetter(x, 'A');
+      }
+      name_ += alphabet[index];
+      index = 0;
+      delay(delay_ / 10);
+    }
+    if (digitalRead(leftButton) == LOW) {
+      if (index != 0) {
+        index--;
+        printLetter(x, alphabet[index]);
+        delay(delay_ / 10);
+      }
+    }
+  }
+  //add the name to the player struct
+  for (int i = 0; i < 3; i++) {
+    player_.name_[i] = name_[i];
+  }
+}
+
+void showChart() {
+  char name1_[3];
+  char name2_[3];
+  int score1_;
+  int score2_;
+  //get both names
+  for (int i = 0; i < 3; i++) {
+    name1_[i] = playerArray[0].name_[i];
+    name2_[i] = playerArray[1].name_[i];
+  }
+  //get both scores
+  score1_ = playerArray[0].score_;
+  score2_ = playerArray[1].score_;
+
+  if (score1_ == 255) {
+    score1_ = 0;
+  }
+  if (score2_ == 255) {
+    score2_ = 0;
+  }
+
+  lcd.clear();
+  if (score1_ > score2_) {
+    printChart(0, name1_, score1_);
+    printChart(1, name2_, score2_);
+    lowerScore = score2_;
+  }
+  else {
+    printChart(0, name2_, score2_);
+    printChart(1, name1_, score1_);
+    lowerScore = score1_;
+  }
+
+  bool finished = false;
+  while (!finished) {
+    if (digitalRead(centerButton) == LOW) {
+      finished = true;
+      delay(delay_ / 10);
+    }
+  }
+}
+
+void save() {
+  if (playerArray[0].score_ == 255) {
+    savePlayer(0);
+    Serial.println("Primo posto vuoto");
+  }
+  else if (playerArray[1].score_ == 255) {
+    savePlayer(4);
+    Serial.println("Secondo posto vuoto");
+  }
+  else if (player_.score_ > lowerScore) {
+    if (lowerScore == playerArray[0].score_) {
+      Serial.println("BRO!");
+      savePlayer(0);
+    }
+    else {
+      savePlayer(4);
+    }
+  }
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//lcd methods
+void confirmMessage() {
+  lcd.clear();
+  lcd.setCursor(2, 0);
+  lcd.print("Confermato!");
+  delay(delay_);
+}
+
+void refreshDifficulty() {
+  lcd.clear();
+  lcd.setCursor(2, 0);
+  lcd.print("difficulty:");
+  if (difficulty == 1) {
+    lcd.setCursor(6, 1);
+    lcd.print("Easy");
+  }
+  else if (difficulty == 2) {
+    lcd.setCursor(5, 1);
+    lcd.print("Normal");
+  }
+  else {
+    lcd.setCursor(6, 1);
+    lcd.print("Hard");
+  }
+}
+
+void greeting() {
+  lcd.setCursor(0, 0);
+  lcd.print("  Gioco arduino");
+  lcd.setCursor(0, 1);
+  lcd.print("    by Luca");
+  delay(delay_);
+  for (int i = 0; i < 17; i++)
+  {
+    lcd.scrollDisplayRight();
+    delay(50);
+  }
+}
+
+void createChars() {
+  lcd.createChar(0, hearth);
+  lcd.createChar(1, eye);
+  lcd.createChar(2, left_good_mouth);
+  lcd.createChar(3, right_good_mouth);
+  lcd.createChar(4, coin1);
+  lcd.createChar(5, coin2);
+  lcd.createChar(6, coin3);
+  lcd.createChar(7, coin4);
+}
+
+void createOneLife(int x, int y) {
+  lcd.setCursor(x, y);
+  lcd.write(byte(0));
+}
+
+void createBadFace(int x) {
+  lcd.setCursor(x, 0);
+  lcd.write(1);
+  lcd.write(1);
+  lcd.setCursor(x, 1);
+  lcd.print("--");
+}
+
+void createGoodFace(int x) {
+  lcd.setCursor(x, 0);
+  lcd.write(1);
+  lcd.write(1);
+  lcd.setCursor(x, 1);
+  lcd.write(2);
+  lcd.write(3);
+}
+
+void createCoin(int x) {
+  lcd.setCursor(x, 0);
+  lcd.write(4);
+  lcd.write(6);
+  lcd.setCursor(x, 1);
+  lcd.write(5);
+  lcd.write(7);
+}
+
 void correct(bool wonNewLife) {
   if (!wonNewLife) {
     lcd.clear();
     lcd.setCursor(4, 0);
     lcd.print("Corretto!");
     lcd.setCursor(7, 1);
-    lcd.print(score);
+    lcd.print(player_.score_);
     delay(delay_ / 2);
     for (int i = 0; i < 16; i++) {
       lcd.scrollDisplayRight();
@@ -312,8 +457,8 @@ void correct(bool wonNewLife) {
     lcd.home();
     lcd.print("Corretto: +1UP!");
     lcd.setCursor(7, 1);
-    lcd.print(score);
-    delay(delay_);
+    lcd.print(player_.score_);
+    delay(delay_ / 2);
     for (int i = 0; i < 16; i++) {
       lcd.scrollDisplayRight();
       delay(delay_ / 50);
@@ -326,8 +471,8 @@ void wrong() {
   lcd.home();
   lcd.print("Sbagliato: -1UP!");
   lcd.setCursor(7, 1);
-  lcd.print(score);
-  delay(delay_);
+  lcd.print(player_.score_);
+  delay(delay_ / 2);
   for (int i = 0; i < 16; i++) {
     lcd.scrollDisplayRight();
     delay(delay_ / 50);
@@ -339,11 +484,68 @@ void tooSlow() {
   lcd.setCursor(1, 0);
   lcd.print("Lento!! -1UP!");
   lcd.setCursor(7, 1);
-  lcd.print(score);
-  delay(delay_);
+  lcd.print(player_.score_);
+  delay(delay_ / 2);
   for (int i = 0; i < 16; i++) {
     lcd.scrollDisplayRight();
     delay(delay_ / 50);
   }
+}
+
+bool printChart(int y, char name_[], int score_) {
+  lcd.setCursor(0, y);
+  if (score_ != 0) {
+    if (y == 0) {
+      String message1 = "1> " + (String)name_ + "  " + score_;
+      lcd.print(message1);
+    }
+    else {
+      String message1 = "2> " + (String)name_ + "  " + score_;
+      lcd.print(message1);
+    }
+  }
+  else {
+    if (y == 0) {
+      String message1 = "1> ---";
+      lcd.print(message1);
+    }
+    else {
+      String message1 = "2> ---";
+      lcd.print(message1);
+    }
+  }
+}
+
+void getDifficultyMessage() {
+  lcd.clear();
+  lcd.setCursor(2, 0);
+  lcd.print("difficulty:");
+  lcd.setCursor(6, 1);
+  lcd.print("Easy");
+}
+
+void getNameMessage() {
+  lcd.clear();
+  lcd.setCursor(1, 0);
+  lcd.print("Scegli un nome");
+}
+
+void ClearSetCursor(int x, int y) {
+  lcd.clear();
+  lcd.setCursor(x, y);
+}
+
+void printLetter(int x, char letter) {
+  lcd.setCursor(x, 1);
+  lcd.print(letter);
+}
+
+void endingAnimation() {
+  ANIM_M1();
+  for (int i = 0; i < 2; i++)
+  {
+    ANIM_CLOSE();
+  }
+  ANIM_1();
 }
 
