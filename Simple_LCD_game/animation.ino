@@ -313,7 +313,7 @@ void sin6()
   ONDA6();
   x = x + 4;
   ONDA6();
-} 
+}
 void sin7()
 {
   ONDA7();

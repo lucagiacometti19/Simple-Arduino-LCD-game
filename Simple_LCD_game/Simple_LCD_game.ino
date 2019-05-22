@@ -1,13 +1,12 @@
 //Luca Giacometti 2019
 
-/* posizione 1 -> x=3
-   posizione 2 -> x=7
-   posizione 3 -> x=11
+/* position 1 -> x=3
+   position 2 -> x=7
+   position 3 -> x=11
 */
 
 #include <EEPROM.h>
 #include <LiquidCrystal.h>
-#define CONFIG_START 0
 
 //costanti
 const int time_ = 2000;
@@ -24,14 +23,14 @@ struct player {
   int score_;
 };
 
-//variabili
+//variables
 int life;
 int difficulty;           //1->easy; 2->normal; 4->hard
 int lowerScore;
 player player_;           //the current player
 player playerArray[2] ;     //array of previous players
 
-//custom char
+//custom chars
 byte hearth[] = {B00000, B00000, B01010, B11111, B11111, B01110, B00100, B00000};
 byte eye[] = {B00000, B00000, B00100, B01110, B01110, B00100, B00000, B00000};
 byte left_good_mouth[] = {B00000, B00000, B00000, B01000, B01000, B00100, B00011, B00000};
@@ -48,16 +47,12 @@ void setup() {
   pinMode(rightButton, INPUT_PULLUP);
   pinMode(centerButton, INPUT_PULLUP);
   pinMode(leftButton, INPUT_PULLUP);
-  Serial.begin(9600);
   getPreviousPlayers();                             //gets previous players from EEPROM
-  Serial.println(playerArray[0].name_);
-  Serial.println(playerArray[0].score_);
-  Serial.println(playerArray[1].name_);
-  Serial.println(playerArray[1].score_);
   difficulty = 1;
   life = 4;
   lcd.begin(16, 2);
-  createChars();
+  createChars();                  //creates the custom chars
+  //clearEEMPROM();               clears EEPROM
 }
 
 void loop() {
@@ -67,20 +62,20 @@ void loop() {
   while (life > 0) {
     play();
   }
-  ClearSetCursor(0, 0);     //pulisce e resetta la poszione del cursore dell'lcd
-  endingAnimation();        //animazione
+  ClearSetCursor(0, 0);     //clears and resets the lcd and its cursor
+  endingAnimation();        //animation
   save();
-  delay(100000000);
+  setup();
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //EEPROM methods
 void savePlayer(int address) {
   //save player name
   EEPROM.put(address, player_.name_);
-  address += (3 * (sizeof(char)));              //ogni char occupa una cella di memoria
+  address += (3 * (sizeof(char)));              
   //save score
   EEPROM.put(address, player_.score_);
-  address++;                                    //aumento address della grandezza di un int < 256
+  address++;                                    //max score saveble is 254!
 }
 
 void getPreviousPlayers() {
@@ -91,7 +86,7 @@ void getPreviousPlayers() {
     //get the name of the player
     char name_ [3];
     for (int i = 0; i < 3; i++) {
-      name_[i] = EEPROM.read(address);
+      name_[i] = (char)EEPROM.read(address);
       address ++;
     }
     //get the score of the player
@@ -108,6 +103,7 @@ void getPreviousPlayers() {
     playerArray[index] = player1_;
     if (index == 0) {
       index++;
+      address++;
     }
     else {
       finished = true;
@@ -146,6 +142,12 @@ void gameStart() {
       updated = false;
       delay(delay_ / 10);
     }
+  }
+}
+
+void clearEEMPROM() {
+  for (int i = 0; i < 20; i++) {
+    EEPROM.write(i, 255);
   }
 }
 
@@ -341,21 +343,27 @@ void showChart() {
 void save() {
   if (playerArray[0].score_ == 255) {
     savePlayer(0);
-    Serial.println("Primo posto vuoto");
   }
   else if (playerArray[1].score_ == 255) {
-    savePlayer(4);
-    Serial.println("Secondo posto vuoto");
+    savePlayer(5);
   }
   else if (player_.score_ > lowerScore) {
     if (lowerScore == playerArray[0].score_) {
-      Serial.println("BRO!");
       savePlayer(0);
     }
     else {
-      savePlayer(4);
+      savePlayer(5);
     }
   }
+}
+
+void endingAnimation() {
+  ANIM_M1();
+  for (int i = 0; i < 2; i++)
+  {
+    ANIM_CLOSE();
+  }
+  ANIM_1();
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //lcd methods
@@ -538,14 +546,5 @@ void ClearSetCursor(int x, int y) {
 void printLetter(int x, char letter) {
   lcd.setCursor(x, 1);
   lcd.print(letter);
-}
-
-void endingAnimation() {
-  ANIM_M1();
-  for (int i = 0; i < 2; i++)
-  {
-    ANIM_CLOSE();
-  }
-  ANIM_1();
 }
 
