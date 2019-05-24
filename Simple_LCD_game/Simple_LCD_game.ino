@@ -6,6 +6,7 @@
 */
 
 #include <EEPROM.h>
+#include <IRremote.h>
 #include <LiquidCrystal.h>
 
 //costanti
@@ -16,6 +17,7 @@ const int centerButton = A4;
 const int leftButton = A3;
 const char alphabet [] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+IRrecv irDetect(8);
 
 //struct [4 bytes]
 struct player {
@@ -27,6 +29,7 @@ struct player {
 int life;
 int difficulty;           //1->easy; 2->normal; 4->hard
 int lowerScore;
+decode_results irIn;
 player player_;           //the current player
 player playerArray[2] ;     //array of previous players
 
@@ -47,6 +50,8 @@ void setup() {
   pinMode(rightButton, INPUT_PULLUP);
   pinMode(centerButton, INPUT_PULLUP);
   pinMode(leftButton, INPUT_PULLUP);
+  irDetect.enableIRIn();
+  Serial.begin(9600);
   getPreviousPlayers();                             //gets previous players from EEPROM
   difficulty = 1;
   life = 4;
@@ -65,14 +70,21 @@ void loop() {
   ClearSetCursor(0, 0);     //clears and resets the lcd and its cursor
   endingAnimation();        //animation
   save();
-  setup();
+  bool finished = false;
+  while (!finished) {
+    if (irDetect.decode(&irIn)) {
+      Serial.println(irIn.value, HEX);
+      finished = detectButton();
+      irDetect.resume();
+    }
+  }
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //EEPROM methods
 void savePlayer(int address) {
   //save player name
   EEPROM.put(address, player_.name_);
-  address += (3 * (sizeof(char)));              
+  address += (3 * (sizeof(char)));
   //save score
   EEPROM.put(address, player_.score_);
   address++;                                    //max score saveble is 254!
@@ -109,6 +121,10 @@ void getPreviousPlayers() {
       finished = true;
     }
   }
+  Serial.println(playerArray[0].name_);
+  Serial.println(playerArray[0].score_);
+  Serial.println(playerArray[1].name_);
+  Serial.println(playerArray[1].score_);
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //main methods
@@ -143,6 +159,17 @@ void gameStart() {
       delay(delay_ / 10);
     }
   }
+}
+
+bool detectButton() {
+  bool complete = false;
+  switch (irIn.value) {
+    case 0xD7E84B1B:
+      complete = true;
+      setup();
+      break;
+  }
+  return complete;
 }
 
 void clearEEMPROM() {
@@ -500,15 +527,20 @@ void tooSlow() {
   }
 }
 
-bool printChart(int y, char name_[], int score_) {
+bool printChart(int y, char name_[3], int score_) {
   lcd.setCursor(0, y);
+  char printingName[2];
+  for(int i = 0; i < 2; i++) {
+    printingName[i] = name_[i];
+    Serial.println("iteraz");
+  }
   if (score_ != 0) {
     if (y == 0) {
-      String message1 = "1> " + (String)name_ + "  " + score_;
+      String message1 = "1> " + (String)printingName + "  " + score_;
       lcd.print(message1);
     }
     else {
-      String message1 = "2> " + (String)name_ + "  " + score_;
+      String message1 = "2> " + (String)printingName + "  " + score_;
       lcd.print(message1);
     }
   }
@@ -522,6 +554,8 @@ bool printChart(int y, char name_[], int score_) {
       lcd.print(message1);
     }
   }
+  Serial.println(printingName);
+  //Serial.println();
 }
 
 void getDifficultyMessage() {
